@@ -1,0 +1,15 @@
+[project]
+name = "tts"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "kokoro>=0.9.4",
+    "pillow>=12.1.0",
+    "pymupdf>=1.26.7",
+    "sounddevice>=0.5.5",
+    "soundfile>=0.13.1",
+    "torch>=2.10.0",
+]
