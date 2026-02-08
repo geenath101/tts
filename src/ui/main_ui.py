@@ -14,50 +14,84 @@ logger = logging.getLogger(__name__)
 class PDFVirtualViewer(ctk.CTk):
     def __init__(self):
         super().__init__()
-        
-        self.grid_columnconfigure(0, weight=0)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=0)
-        self.grid_rowconfigure(0, weight=1)
+        self.title("TTS PDF Reader")
+        self.geometry("1200x800")
+        self.model = AudioModel()
+        self.file_reader = FileReader()
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=1)
 
-          # --- LEFT SIDEBAR ---
-        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        # --- HEADER ---
+        self.header = ctk.CTkFrame(self, corner_radius=0)
+        self.header.grid(row=0, column=0, sticky="nsew")
+        self.header.grid_columnconfigure(0, weight=1)
+        self.header.grid_columnconfigure(1, weight=0)
 
-        self.logo_label = ctk.CTkLabel(self.sidebar, text="PDF Reader", font=("Roboto", 20, "bold"))
-        self.logo_label.pack(pady=20, padx=10)
+        self.logo_label = ctk.CTkLabel(
+            self.header,
+            text="TTS PDF Reader",
+            font=("Roboto", 22, "bold"),
+        )
+        self.logo_label.grid(row=0, column=0, sticky="w", padx=20, pady=12)
 
-        self.page_label = ctk.CTkLabel(self.sidebar, text="Page: 0 / 0", font=("Roboto", 16))
-        self.page_label.pack(pady=20)
+        self.appearance_mode_optionemenu = ctk.CTkOptionMenu(
+            self.header,
+            values=["Dark", "Light", "System"],
+            command=self.change_appearance_mode,
+            width=140,
+        )
+        self.appearance_mode_optionemenu.grid(row=0, column=1, padx=20, pady=12)
+
+        # --- BODY ---
+        self.body = ctk.CTkFrame(self, corner_radius=0)
+        self.body.grid(row=1, column=0, sticky="nsew")
+        self.body.grid_columnconfigure(0, weight=0)
+        self.body.grid_columnconfigure(1, weight=1)
+        self.body.grid_columnconfigure(2, weight=0)
+        self.body.grid_rowconfigure(0, weight=1)
+
+        # --- LEFT PANEL ---
+        self.sidebar = ctk.CTkFrame(self.body, width=260, corner_radius=12)
+        self.sidebar.grid(row=0, column=0, sticky="nsew", padx=(16, 8), pady=16)
+        self.sidebar.grid_rowconfigure(5, weight=1)
 
         self.open_button = ctk.CTkButton(self.sidebar, text="Open PDF", command=self.load_pdf)
-        self.open_button.pack(pady=10, padx=20)
-        
+        self.open_button.grid(row=0, column=0, padx=16, pady=(20, 10), sticky="ew")
+
         self.play_button = ctk.CTkButton(self.sidebar, text="Start Audio", command=self.start_audio)
-        self.play_button.pack(pady=10, padx=20)
+        self.play_button.grid(row=1, column=0, padx=16, pady=8, sticky="ew")
 
         self.pause_button = ctk.CTkButton(self.sidebar, text="Stop Audio", command=self.stop_audio)
-        self.pause_button.pack(pady=10, padx=20)
+        self.pause_button.grid(row=2, column=0, padx=16, pady=8, sticky="ew")
 
-        self.appearance_label = ctk.CTkLabel(self.sidebar, text="Appearance Mode:", anchor="w")
-        self.appearance_label.pack(side="bottom", padx=20, pady=(0, 10))
+        self.page_label = ctk.CTkLabel(self.sidebar, text="Page: 0 / 0", font=("Roboto", 16, "bold"))
+        self.page_label.grid(row=3, column=0, padx=16, pady=(20, 6), sticky="w")
 
-        self.appearance_mode_optionemenu = ctk.CTkOptionMenu(self.sidebar, values=["Dark", "Light", "System"],command=self.change_appearance_mode)
-        self.appearance_mode_optionemenu.pack(side="bottom", padx=20, pady=10)
+        self.status_label = ctk.CTkLabel(self.sidebar, text="Status: Idle", font=("Roboto", 13))
+        self.status_label.grid(row=4, column=0, padx=16, pady=(0, 16), sticky="w")
+
+        self.file_label = ctk.CTkLabel(
+            self.sidebar,
+            text="No file selected",
+            font=("Roboto", 12),
+            justify="left",
+            wraplength=220,
+        )
+        self.file_label.grid(row=6, column=0, padx=16, pady=(0, 16), sticky="w")
+
+        # --- MAIN CONTENT ---
+        self.content_area = ctk.CTkFrame(self.body, corner_radius=12)
+        self.content_area.grid(row=0, column=1, sticky="nsew", padx=8, pady=16)
+
+        # --- SCROLLBAR ---
+        self.v_scroll = ctk.CTkScrollbar(self.body, command=self.on_scroll_manual)
+        self.v_scroll.grid(row=0, column=2, sticky="ns", padx=(0, 16), pady=16)
 
         # Page Indicator Label
-        
         self.current_top_index = 0
         self.visible_count = 1   # Number of pages to show at once
         self.zoom = 1.5
-        
-        # 3. Main Layout
-        self.content_area = ctk.CTkFrame(self)
-        self.content_area.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        
-        # 4. The Standalone Scrollbar
-        self.v_scroll = ctk.CTkScrollbar(self, command=self.on_scroll_manual)
-        self.v_scroll.grid(row=0, column=2, sticky="ns", padx=(0, 5), pady=10)
 
         # 5. Bindings (Linux Mousewheel)
         # We bind to the whole app so scrolling works anywhere
@@ -77,21 +111,19 @@ class PDFVirtualViewer(ctk.CTk):
         if not self.current_pdf_path:
             return
         if self.audio_thread and self.audio_thread.is_alive():
+            logger.debug("thread is already playing")
             return
-
         start_page = self.current_top_index
-        logger.info("starting audio from page %s", start_page + 1)
-
-        model = AudioModel()
-        file_reader = FileReader(self.current_pdf_path)
-        file_content = file_reader.get_content_as_string(start_page=start_page)
-        audio_generator = model.get_audio_generator(file_content)
-
+        logger.debug("starting audio from page %s", start_page + 1)
+        self.status_label.configure(text=f"Status: Playing (page {start_page + 1})")
+        file_content = self.file_reader.get_content_as_string(self.doc, start_page=start_page)
+        audio_generator = self.model.get_audio_generator(file_content)
         application.start_playback_async(audio_generator)
 
     def stop_audio(self):
         logger.info("stop audio requested")
         application.stop_playback()
+        self.status_label.configure(text="Status: Stopped")
 
     def get_page_image(self, page_num):
         """Renders or retrieves the image for a specific page."""
@@ -146,6 +178,8 @@ class PDFVirtualViewer(ctk.CTk):
         if not file_path:
             return
         self.current_pdf_path = file_path
+        self.file_label.configure(text=file_path)
+        self.status_label.configure(text="Status: Ready")
         self.doc = fitz.open(file_path)
         self.total_pages = len(self.doc)
         self.page_height = 1000

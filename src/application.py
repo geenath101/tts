@@ -1,7 +1,5 @@
 import time
 import queue
-import soundfile as sf
-import numpy as np
 import threading
 import logging
 import sounddevice as sd
@@ -19,6 +17,7 @@ def _clear_queue():
         while True:
             audio_queue.get_nowait()
     except queue.Empty:
+        logger.debug("Audio queue is now empty")
         return
 
 """Generates audio but takes mandatory 'breathers' to cool the GPU."""
@@ -31,6 +30,7 @@ def audio_producer(generator, cool_down=2.0):
         try:
             audio_queue.put(audio, timeout=0.5)
         except queue.Full:
+            logger.debug("Audio queue is full")
             if stop_event.is_set():
                 break
             continue
@@ -43,12 +43,12 @@ def audio_producer(generator, cool_down=2.0):
     just as you finish listening to the previous one."""
 def _playback_consumer(sample_rate=24000):
     logger.info("listener thread started: %s", threading.current_thread().name)
-    logger.info("starting playback")
     time.sleep(0.5)
     while True:
         try:
             chunk = audio_queue.get(timeout=0.5)
         except queue.Empty:
+            logger.debug("Audio queue is empty")
             if stop_event.is_set():
                 break
             continue
@@ -59,8 +59,6 @@ def _playback_consumer(sample_rate=24000):
             break
         sd.play(chunk, sample_rate)
         sd.wait()
-
-    logger.info("--- Finished ---")
 
 
 def start_playback_async(generator, sample_rate=24000, cool_down_time=1.5):
@@ -84,16 +82,12 @@ def start_playback_async(generator, sample_rate=24000, cool_down_time=1.5):
     consumer_thread.start()
 
 
-def start_listening_cool(generator, sample_rate=24000, cool_down_time=1.5):
-    start_playback_async(generator, sample_rate=sample_rate, cool_down_time=cool_down_time)
-
-
 def stop_playback():
     stop_event.set()
     try:
         sd.stop()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("Error stopping audio: %s", e)
     _clear_queue()
     try:
         audio_queue.put_nowait(None)

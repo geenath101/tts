@@ -14,3 +14,4 @@
 - 2026-02-08: TTS now starts from the selected page (not from the beginning).
 - 2026-02-08: Made stop/playback queue operations non-blocking to prevent UI freezes.
 - 2026-02-08: Moved playback to a dedicated consumer thread with async start.
+- 2026-02-08: Redesigned UI with header, sidebar controls, status, and file display.
