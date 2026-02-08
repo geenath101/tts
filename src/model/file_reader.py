@@ -9,9 +9,10 @@ class FileReader:
         self.path = file_path
 
 
-    def get_content_as_string(self):
+    def get_content_as_string(self, start_page: int = 0):
         #print(f"page count is  {len(self.doc)}")
         doc = fitz.open(self.path)
-        book_content =  " ".join([page.get_text() for page in doc])
+        safe_start = max(0, min(start_page, len(doc)))
+        book_content = " ".join([page.get_text() for page in doc[safe_start:]])
         first_split = re.split(r'(?<=[.!?])\s*', book_content)
         return first_split

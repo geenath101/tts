@@ -1,9 +1,15 @@
 import customtkinter as ctk
-
-import customtkinter as ctk
 import fitz
+import threading
+import logging
 from PIL import Image
 from customtkinter import filedialog
+
+from src.model.model import AudioModel
+from src.model.file_reader import FileReader
+from src import application
+
+logger = logging.getLogger(__name__)
 
 class PDFVirtualViewer(ctk.CTk):
     def __init__(self):
@@ -27,10 +33,10 @@ class PDFVirtualViewer(ctk.CTk):
         self.open_button = ctk.CTkButton(self.sidebar, text="Open PDF", command=self.load_pdf)
         self.open_button.pack(pady=10, padx=20)
         
-        self.play_button = ctk.CTkButton(self.sidebar, text="Start Audio")
+        self.play_button = ctk.CTkButton(self.sidebar, text="Start Audio", command=self.start_audio)
         self.play_button.pack(pady=10, padx=20)
 
-        self.pause_button = ctk.CTkButton(self.sidebar, text="Pause Audio")
+        self.pause_button = ctk.CTkButton(self.sidebar, text="Stop Audio", command=self.stop_audio)
         self.pause_button.pack(pady=10, padx=20)
 
         self.appearance_label = ctk.CTkLabel(self.sidebar, text="Appearance Mode:", anchor="w")
@@ -60,10 +66,32 @@ class PDFVirtualViewer(ctk.CTk):
         
         # 6. Create the Reusable Pool
         self.page_widgets = []
+        self.current_pdf_path = None
+        self.audio_thread = None
         
 
     def change_appearance_mode(self, new_appearance_mode: str):
         ctk.set_appearance_mode(new_appearance_mode)
+
+    def start_audio(self):
+        if not self.current_pdf_path:
+            return
+        if self.audio_thread and self.audio_thread.is_alive():
+            return
+
+        start_page = self.current_top_index
+        logger.info("starting audio from page %s", start_page + 1)
+
+        model = AudioModel()
+        file_reader = FileReader(self.current_pdf_path)
+        file_content = file_reader.get_content_as_string(start_page=start_page)
+        audio_generator = model.get_audio_generator(file_content)
+
+        application.start_playback_async(audio_generator)
+
+    def stop_audio(self):
+        logger.info("stop audio requested")
+        application.stop_playback()
 
     def get_page_image(self, page_num):
         """Renders or retrieves the image for a specific page."""
@@ -77,7 +105,7 @@ class PDFVirtualViewer(ctk.CTk):
     def refresh_view(self):
         """Updates the images in the fixed frames based on the current index."""
         actual_page_num = self.current_top_index
-        print(f" current index ..... {self.current_top_index}")
+        logger.debug("current index: %s", self.current_top_index)
         if actual_page_num < self.total_pages:
             img = self.get_page_image(actual_page_num)
             self.page_widgets[0]["label"].configure(image=img, text="")
@@ -115,6 +143,9 @@ class PDFVirtualViewer(ctk.CTk):
 
     def load_pdf(self):
         file_path = filedialog.askopenfilename(filetypes=[("PDF Files","*.pdf")])
+        if not file_path:
+            return
+        self.current_pdf_path = file_path
         self.doc = fitz.open(file_path)
         self.total_pages = len(self.doc)
         self.page_height = 1000
@@ -131,5 +162,12 @@ class PDFVirtualViewer(ctk.CTk):
        
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    logging.getLogger("fitz").setLevel(logging.WARNING)
+
     app = PDFVirtualViewer()
     app.mainloop()

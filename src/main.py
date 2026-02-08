@@ -2,9 +2,17 @@ from model.model import AudioModel
 from model.file_reader import FileReader
 import application
 import sys
+import logging
 
 if __name__ == "__main__":
-    print(f"application started")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    )
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    logging.getLogger("fitz").setLevel(logging.WARNING)
+
+    logging.getLogger(__name__).info("application started")
     model = AudioModel()
     file =  FileReader("./resources/Geenath_cover_letter.pdf")
     file_content = file.get_content_as_string()
